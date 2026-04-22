@@ -39,7 +39,6 @@
 ## 3. 快速启动（uv）
 
 ```bash
-cd backend
 uv venv
 source .venv/bin/activate
 uv sync --extra dev
@@ -98,7 +97,6 @@ curl http://127.0.0.1:8000/history/demo-1
 ## 6. 测试
 
 ```bash
-cd backend
 uv run pytest -q
 ```
 
@@ -120,17 +118,19 @@ uv run pytest -q
 ## 8. 目录结构
 
 ```text
-backend/
+.
 ├── app/
-│   ├── api/
-│   ├── agents/
-│   ├── core/
-│   ├── graph/
-│   ├── schemas/
-│   ├── services/
-│   └── main.py
-├── tests/
-├── resources/
-├── README.md
-└── pyproject.toml
+│   ├── api/          # FastAPI 路由
+│   ├── agents/       # Agent 封装
+│   ├── core/         # 配置和日志
+│   ├── graph/        # LangGraph 工作流和状态
+│   ├── schemas/      # Pydantic 请求/响应模型
+│   ├── services/     # LLM 和 Tavily 服务
+│   └── main.py       # 应用入口
+├── tests/            # 单元测试和集成测试
+├── resources/        # 资源文件（流程图等）
+├── frontend/         # React 前端
+├── .env.example      # 环境变量模板
+├── pyproject.toml    # Python 项目配置
+└── README.md
 ```

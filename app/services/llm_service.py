@@ -41,11 +41,24 @@ class LLMService:
             ]
         )
         response = self._vision.invoke([message])
+        raw_content = str(response.content).strip()
+        logger.info(f"Raw vision model response: {raw_content}...")
+        
+        # 尝试提取 JSON（处理可能的 markdown 代码块）
+        json_str = raw_content
+        if "```json" in raw_content:
+            json_str = raw_content.split("```json")[1].split("```")[0].strip()
+        elif "```" in raw_content:
+            json_str = raw_content.split("```")[1].split("```")[0].strip()
+        
         try:
-            return json.loads(response.content)
+            result = json.loads(json_str)
+            logger.info(f"Successfully parsed {len(result)} ingredients")
+            return result
         except (json.JSONDecodeError, TypeError) as e:
             logger.error(f"Failed to parse ingredients JSON: {e}")
-            logger.error(f"Response content: {response.content}")
+            logger.error(f"Attempted to parse: {json_str[:500]}")
+            logger.error(f"Original response: {raw_content[:500]}")
             return []
 
     def rank_recipes(self, ingredients: list[dict[str, Any]], candidates: list[dict[str, Any]]) -> dict[str, Any]:
@@ -65,17 +78,42 @@ class LLMService:
             )
         )
         result = self._chat.invoke([system, user])
+        raw_content = str(result.content).strip()
+        logger.info(f"Raw chat model response (first 200 chars): {raw_content[:200]}...")
+        
+        # 尝试提取 JSON（处理可能的 markdown 代码块）
+        json_str = raw_content
+        if "```json" in raw_content:
+            json_str = raw_content.split("```json")[1].split("```")[0].strip()
+        elif "```" in raw_content:
+            json_str = raw_content.split("```")[1].split("```")[0].strip()
+        
         try:
-            return json.loads(result.content)
+            parsed = json.loads(json_str)
+            logger.info(f"Successfully parsed recipes with {len(parsed.get('top3', []))} items")
+            return parsed
         except (json.JSONDecodeError, TypeError) as e:
             logger.error(f"Failed to parse recipes JSON: {e}")
-            logger.error(f"Response content: {result.content}")
-            return {"top3": [], "table_markdown": str(result.content)}
+            logger.error(f"Attempted to parse: {json_str[:500]}")
+            logger.error(f"Original response: {raw_content[:500]}")
+            return {"top3": [], "table_markdown": raw_content}
 
     def followup(self, context: dict[str, Any], question: str) -> str:
         response = self._chat.invoke(
             [
-                SystemMessage(content="你是私厨助手，回答要分步骤、可执行。"),
+                SystemMessage(
+                    content=(
+                        "你是私厨助手，回答要分步骤、可执行。\n"
+                        "请生成严格遵循 CommonMark 规范的 Markdown 内容：\n"
+                        "- 只使用标准 Markdown 语法（不支持表情符号、HTML标签）\n"
+                        "- 标题使用 #、##、###\n"
+                        "- 列表使用 - 或 1. 并保持正确的缩进\n"
+                        "- 加粗使用 **text**，斜体使用 *text*\n"
+                        "- 不使用 😀、🍳 等表情符号\n"
+                        "- 引用块使用 > 后加空格\n"
+                        "- 代码或食材名称使用 `反引号` 标注"
+                    )
+                ),
                 HumanMessage(content=f"context={json.dumps(context, ensure_ascii=False)}\nquestion={question}"),
             ]
         )
