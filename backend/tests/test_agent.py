@@ -28,7 +28,13 @@ class DummyLLM:
         return f"回答: {question}"
 
     def weekly_plan(self, history_text: str):
-        return "| 周一 | 周二 |\n|---|---|\n| 燕麦 | 米饭 |"
+        return {
+            "weekly_plan": [
+                {"day": "周一", "breakfast": "燕麦", "lunch": "鸡胸肉沙拉", "dinner": "蔬菜面", "reason": "控油"},
+                {"day": "周二", "breakfast": "鸡蛋", "lunch": "糙米饭", "dinner": "鱼汤", "reason": "高蛋白"},
+            ],
+            "weekly_plan_markdown": "| 周一 | 周二 |\n|---|---|\n| 燕麦 | 鸡蛋 |",
+        }
 
 
 class DummyTavily:
@@ -52,6 +58,7 @@ def test_graph_analyze_followup_and_weekly_plan(tmp_path: Path):
 
     weekly = agent.weekly_plan("t-1", "工作日常吃外卖")
     assert weekly["step"] == "weekly_plan_generated"
+    assert len(weekly["weekly_plan"]) >= 1
     assert "周一" in weekly["weekly_plan_markdown"]
 
     history = agent.get_history("t-1")

@@ -100,7 +100,8 @@ class ChefGraphFactory:
     def _weekly_node(self, state: ChefState) -> ChefState:
         weekly_plan = self.llm_service.weekly_plan(state.get("history_text", ""))
         return {
-            "weekly_plan_markdown": weekly_plan,
+            "weekly_plan": weekly_plan.get("weekly_plan", []),
+            "weekly_plan_markdown": weekly_plan.get("weekly_plan_markdown", ""),
             "step": "weekly_plan_generated",
             "messages": [AIMessage(content="已生成周计划")],
         }

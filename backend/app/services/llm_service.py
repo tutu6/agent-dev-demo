@@ -62,17 +62,28 @@ class LLMService:
         )
         return str(response.content)
 
-    def weekly_plan(self, history_text: str) -> str:
+    def weekly_plan(self, history_text: str) -> dict[str, Any]:
         response = self._chat.invoke(
             [
-                SystemMessage(content="你是营养师，请输出 markdown 表格。"),
+                SystemMessage(content="你是营养师，请只输出 JSON，不要输出额外文本。"),
                 HumanMessage(
                     content=(
                         "根据用户历史饮食，生成一周饮食计划（早/午/晚餐）。"
-                        "仅输出 markdown 表格。\n"
+                        "输出 JSON，格式为："
+                        '{"weekly_plan":[{"day":"周一","breakfast":"...","lunch":"...","dinner":"...","reason":"..."}],'
+                        '"weekly_plan_markdown":"markdown表格"}。'
+                        "必须包含周一到周日共 7 天。\n"
                         f"history={history_text}"
                     )
                 ),
             ]
         )
-        return str(response.content)
+        raw = str(response.content)
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            return {"weekly_plan": [], "weekly_plan_markdown": raw}
+        return {
+            "weekly_plan": data.get("weekly_plan", []),
+            "weekly_plan_markdown": data.get("weekly_plan_markdown", ""),
+        }

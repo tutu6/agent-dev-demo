@@ -61,8 +61,8 @@ TAVILY_API_KEY=your_tavily_key
 ### POST /upload
 ```bash
 curl -X POST http://127.0.0.1:8000/upload \
-  -H 'Content-Type: application/json' \
-  -d '{"thread_id":"demo-1","image_base64":"..."}'
+  -F "thread_id=demo-1" \
+  -F "image_file=@/path/to/fridge.jpg"
 ```
 
 ### POST /url
@@ -85,6 +85,10 @@ curl -X POST http://127.0.0.1:8000/weekly_plan \
   -H 'Content-Type: application/json' \
   -d '{"thread_id":"demo-1","history_text":"过去一周经常吃外卖和甜饮"}'
 ```
+
+返回中包含：
+- `weekly_plan`：结构化周计划（便于第三方平台接入）
+- `weekly_plan_markdown`：可直接展示的 markdown 表格
 
 ### GET /history/{thread_id}
 ```bash

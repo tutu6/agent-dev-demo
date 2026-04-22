@@ -28,6 +28,7 @@ class FollowupResponse(BaseModel):
 
 class WeeklyPlanResponse(BaseModel):
     thread_id: str
+    weekly_plan: list[dict[str, Any]]
     weekly_plan_markdown: str
 
 
