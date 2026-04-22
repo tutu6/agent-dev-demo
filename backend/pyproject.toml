@@ -1,0 +1,33 @@
+[project]
+name = "ai-private-chef-assistant"
+version = "0.1.0"
+description = "AI 私厨助手 POC（FastAPI + LangGraph + Qwen + Tavily）"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.30.0",
+  "pydantic>=2.8.0",
+  "pydantic-settings>=2.3.0",
+  "langchain>=0.3.0",
+  "langchain-openai>=0.2.0",
+  "langgraph>=0.2.0",
+  "langgraph-checkpoint-sqlite>=2.0.0",
+  "tavily-python>=0.5.0",
+  "python-multipart>=0.0.9",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2.0",
+  "pytest-mock>=3.14.0",
+  "httpx>=0.27.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
