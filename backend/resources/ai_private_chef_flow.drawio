@@ -1,0 +1,46 @@
+<mxfile host="app.diagrams.net" modified="2026-04-22T00:00:00.000Z" agent="codex" version="24.7.0">
+  <diagram id="main-flow" name="Main Flow">
+    <mxGraphModel dx="1280" dy="720" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="850" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="u" value="用户输入（图片/URL）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="40" y="120" width="180" height="60" as="geometry"/></mxCell>
+        <mxCell id="r" value="Qwen-VL 食材识别&#xa;（新鲜度/余量）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="270" y="120" width="220" height="70" as="geometry"/></mxCell>
+        <mxCell id="s" value="Tavily 菜谱检索" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1"><mxGeometry x="540" y="120" width="180" height="60" as="geometry"/></mxCell>
+        <mxCell id="k" value="Qwen 排序评分&#xa;输出 Top3 表格" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1"><mxGeometry x="760" y="120" width="200" height="70" as="geometry"/></mxCell>
+        <mxCell id="f" value="用户追问 /followup" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1"><mxGeometry x="760" y="240" width="200" height="60" as="geometry"/></mxCell>
+        <mxCell id="w" value="周计划 /weekly_plan" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1"><mxGeometry x="760" y="330" width="200" height="60" as="geometry"/></mxCell>
+        <mxCell id="c1" edge="1" parent="1" source="u" target="r" style="endArrow=block;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="c2" edge="1" parent="1" source="r" target="s" style="endArrow=block;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="c3" edge="1" parent="1" source="s" target="k" style="endArrow=block;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="c4" edge="1" parent="1" source="k" target="f" style="endArrow=block;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="c5" edge="1" parent="1" source="k" target="w" style="endArrow=block;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="langgraph-flow" name="LangGraph State Flow">
+    <mxGraphModel dx="1280" dy="720" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="850" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="start" value="START" style="ellipse;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="40" y="140" width="90" height="50" as="geometry"/></mxCell>
+        <mxCell id="route" value="route_intent" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1"><mxGeometry x="170" y="130" width="130" height="70" as="geometry"/></mxCell>
+        <mxCell id="n1" value="recognize\nstep=ingredients_recognized" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="350" y="40" width="220" height="60" as="geometry"/></mxCell>
+        <mxCell id="n2" value="search\nstep=recipes_searched" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="610" y="40" width="200" height="60" as="geometry"/></mxCell>
+        <mxCell id="n3" value="rank\nstep=recipes_ranked\n(selected_index)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="850" y="40" width="220" height="70" as="geometry"/></mxCell>
+        <mxCell id="n4" value="followup\nstep=followup_answered" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="350" y="150" width="220" height="60" as="geometry"/></mxCell>
+        <mxCell id="n5" value="weekly\nstep=weekly_plan_generated" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="350" y="260" width="220" height="60" as="geometry"/></mxCell>
+        <mxCell id="end" value="END" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1"><mxGeometry x="980" y="200" width="90" height="50" as="geometry"/></mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="start" target="route" style="endArrow=block;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e2" value="analyze" edge="1" parent="1" source="route" target="n1" style="endArrow=block;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="n1" target="n2" style="endArrow=block;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="n2" target="n3" style="endArrow=block;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="n3" target="end" style="endArrow=block;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e6" value="followup" edge="1" parent="1" source="route" target="n4" style="endArrow=block;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e7" edge="1" parent="1" source="n4" target="end" style="endArrow=block;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e8" value="weekly_plan" edge="1" parent="1" source="route" target="n5" style="endArrow=block;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e9" edge="1" parent="1" source="n5" target="end" style="endArrow=block;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
