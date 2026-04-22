@@ -9,10 +9,10 @@ class UrlRequest(BaseModel):
 
 
 class FollowupRequest(BaseModel):
-    thread_id: str
-    question: str
+    thread_id: str = Field(..., description="会话 ID")
+    question: str = Field(..., description="用户问题", min_length=1)
 
 
 class WeeklyPlanRequest(BaseModel):
-    thread_id: str
-    history_text: str = Field(..., description="用户历史饮食文本")
+    thread_id: str = Field(..., description="会话 ID")
+    history_text: str = Field(..., description="用户历史饮食文本", min_length=1)

@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
 from app.core.config import Settings
+
+logger = logging.getLogger(__name__)
 
 
 class LLMService:
@@ -38,20 +41,36 @@ class LLMService:
             ]
         )
         response = self._vision.invoke([message])
-        return json.loads(response.content)
+        try:
+            return json.loads(response.content)
+        except (json.JSONDecodeError, TypeError) as e:
+            logger.error(f"Failed to parse ingredients JSON: {e}")
+            logger.error(f"Response content: {response.content}")
+            return []
 
     def rank_recipes(self, ingredients: list[dict[str, Any]], candidates: list[dict[str, Any]]) -> dict[str, Any]:
         system = SystemMessage(content="你是严谨的私厨助手。只输出 JSON。")
         user = HumanMessage(
             content=(
-                "根据食材列表和候选菜谱，按可执行性、食材匹配度、健康度打分。"
-                "输出 JSON: {top3:[{rank,name,reason,score,source_url}], table_markdown:""...""}。\n"
+                "根据食材列表和候选菜谱，按可执行性、食材匹配度、健康度打分。\n"
+                "重要要求：\n"
+                "1. name 必须是具体的菜谱名称（如'青椒炒肉丝'），不能是网页标题或榜单名称\n"
+                "2. 从 candidates 的 title 和 content 中提取真正的菜名\n"
+                "3. source_url 必须从 candidates 中的 url 字段获取，保持原样不要修改\n"
+                "4. reason 要说明为什么推荐这个菜谱\n"
+                "5. score 是 0-100 的分数\n"
+                "输出 JSON 格式：{\"top3\": [{\"rank\": 1, \"name\": \"具体菜名\", \"reason\": \"推荐理由\", \"score\": 85, \"source_url\": \"网址\"}], \"table_markdown\": \"markdown表格\"}\n"
                 f"ingredients={json.dumps(ingredients, ensure_ascii=False)}\n"
                 f"candidates={json.dumps(candidates, ensure_ascii=False)}"
             )
         )
         result = self._chat.invoke([system, user])
-        return json.loads(result.content)
+        try:
+            return json.loads(result.content)
+        except (json.JSONDecodeError, TypeError) as e:
+            logger.error(f"Failed to parse recipes JSON: {e}")
+            logger.error(f"Response content: {result.content}")
+            return {"top3": [], "table_markdown": str(result.content)}
 
     def followup(self, context: dict[str, Any], question: str) -> str:
         response = self._chat.invoke(
