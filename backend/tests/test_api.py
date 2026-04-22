@@ -31,6 +31,9 @@ def test_all_required_apis():
     app.dependency_overrides[get_agent] = lambda: FakeAgent()
     client = TestClient(app)
 
+    root_resp = client.get("/")
+    assert root_resp.status_code == 200
+
     upload_resp = client.post("/upload", json={"thread_id": "t1", "image_base64": "ZmFrZQ=="})
     assert upload_resp.status_code == 200
 
