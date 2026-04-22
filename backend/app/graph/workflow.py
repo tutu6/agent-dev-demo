@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
 from pathlib import Path
 
 from langchain_core.messages import AIMessage, HumanMessage
@@ -37,7 +38,12 @@ class ChefGraphFactory:
 
         db_path = Path(self.sqlite_path)
         db_path.parent.mkdir(parents=True, exist_ok=True)
-        saver = SqliteSaver.from_conn_string(str(db_path))
+        # langgraph-checkpoint-sqlite>=2.x changed `from_conn_string` to return
+        # a context manager. `graph.compile` requires a concrete
+        # `BaseCheckpointSaver` instance, so we create the saver directly from
+        # a long-lived sqlite connection.
+        conn = sqlite3.connect(str(db_path), check_same_thread=False)
+        saver = SqliteSaver(conn)
         return graph.compile(checkpointer=saver)
 
     def _route_intent(self, state: ChefState) -> str:
@@ -94,7 +100,8 @@ class ChefGraphFactory:
     def _weekly_node(self, state: ChefState) -> ChefState:
         weekly_plan = self.llm_service.weekly_plan(state.get("history_text", ""))
         return {
-            "weekly_plan_markdown": weekly_plan,
+            "weekly_plan": weekly_plan.get("weekly_plan", []),
+            "weekly_plan_markdown": weekly_plan.get("weekly_plan_markdown", ""),
             "step": "weekly_plan_generated",
             "messages": [AIMessage(content="已生成周计划")],
         }

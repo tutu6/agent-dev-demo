@@ -21,7 +21,10 @@ class FakeAgent:
         return {"answer": "步骤1...", "selected_index": 0}
 
     def weekly_plan(self, thread_id: str, history_text: str):
-        return {"weekly_plan_markdown": "|周一|周二|"}
+        return {
+            "weekly_plan": [{"day": "周一", "breakfast": "鸡蛋", "lunch": "米饭", "dinner": "鱼汤", "reason": "均衡"}],
+            "weekly_plan_markdown": "|周一|周二|",
+        }
 
     def get_history(self, thread_id: str):
         return {"thread_id": thread_id, "step": "recipes_ranked"}
@@ -31,7 +34,14 @@ def test_all_required_apis():
     app.dependency_overrides[get_agent] = lambda: FakeAgent()
     client = TestClient(app)
 
-    upload_resp = client.post("/upload", json={"thread_id": "t1", "image_base64": "ZmFrZQ=="})
+    root_resp = client.get("/")
+    assert root_resp.status_code == 200
+
+    upload_resp = client.post(
+        "/upload",
+        data={"thread_id": "t1"},
+        files={"image_file": ("fridge.jpg", b"fake-image-bytes", "image/jpeg")},
+    )
     assert upload_resp.status_code == 200
 
     url_resp = client.post("/url", json={"thread_id": "t1", "image_url": "https://example.com/a.jpg"})

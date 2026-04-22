@@ -26,6 +26,11 @@ app = FastAPI(title=settings.app_name, version=settings.app_version)
 app.include_router(router)
 
 
+@app.get("/")
+def root() -> dict[str, str]:
+    return {"message": "AI 私厨助手服务运行中", "health": "/health", "docs": "/docs"}
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}

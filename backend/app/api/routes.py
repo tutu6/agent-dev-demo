@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+import base64
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from app.agents.private_chef_agent import PrivateChefAgent
-from app.schemas.requests import FollowupRequest, UploadRequest, UrlRequest, WeeklyPlanRequest
+from app.schemas.requests import FollowupRequest, UrlRequest, WeeklyPlanRequest
 from app.schemas.responses import AnalyzeResponse, FollowupResponse, HistoryResponse, WeeklyPlanResponse
 
 router = APIRouter()
@@ -16,13 +18,21 @@ def get_agent() -> PrivateChefAgent:
 
 
 @router.post("/upload", response_model=AnalyzeResponse)
-def upload_image(payload: UploadRequest, chef_agent: PrivateChefAgent = Depends(get_agent)) -> AnalyzeResponse:
+async def upload_image(
+    thread_id: str = Form(...),
+    image_file: UploadFile = File(...),
+    chef_agent: PrivateChefAgent = Depends(get_agent),
+) -> AnalyzeResponse:
+    content = await image_file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="empty image file")
+    image_base64 = base64.b64encode(content).decode("utf-8")
     try:
-        state = chef_agent.analyze_by_upload(payload.thread_id, payload.image_base64)
+        state = chef_agent.analyze_by_upload(thread_id, image_base64)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return AnalyzeResponse(
-        thread_id=payload.thread_id,
+        thread_id=thread_id,
         ingredients=state.get("ingredients", []),
         recipes=state.get("recipes", []),
         table_markdown=state.get("table_markdown", ""),
@@ -53,7 +63,11 @@ def followup(payload: FollowupRequest, chef_agent: PrivateChefAgent = Depends(ge
 @router.post("/weekly_plan", response_model=WeeklyPlanResponse)
 def weekly_plan(payload: WeeklyPlanRequest, chef_agent: PrivateChefAgent = Depends(get_agent)) -> WeeklyPlanResponse:
     state = chef_agent.weekly_plan(payload.thread_id, payload.history_text)
-    return WeeklyPlanResponse(thread_id=payload.thread_id, weekly_plan_markdown=state.get("weekly_plan_markdown", ""))
+    return WeeklyPlanResponse(
+        thread_id=payload.thread_id,
+        weekly_plan=state.get("weekly_plan", []),
+        weekly_plan_markdown=state.get("weekly_plan_markdown", ""),
+    )
 
 
 @router.get("/history/{thread_id}", response_model=HistoryResponse)

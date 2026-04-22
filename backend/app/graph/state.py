@@ -22,4 +22,5 @@ class ChefState(TypedDict, total=False):
     step: str
     table_markdown: str
     answer: str
+    weekly_plan: list[dict[str, Any]]
     weekly_plan_markdown: str
