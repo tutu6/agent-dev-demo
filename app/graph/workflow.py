@@ -47,10 +47,10 @@ class ChefGraphFactory:
 
     def _recognize_node(self, state: ChefState) -> ChefState:
         image_url = state["input_image_url"]
-        ingredients = [Ingredient.model_validate(item) for item in self.llm_service.recognize_ingredients(image_url)]
+        ingredients = self.llm_service.recognize_ingredients(image_url)
         logger.info("recognized %s ingredients", len(ingredients))
         return {
-            "ingredients": ingredients,
+            "ingredients": [item.model_dump() for item in ingredients],  # 转为 dict
             "step": "ingredients_recognized",
             "messages": [HumanMessage(content=f"识别食材: {[item.model_dump() for item in ingredients]}")],
         }
@@ -59,7 +59,7 @@ class ChefGraphFactory:
         ingredients = [Ingredient.model_validate(item) for item in state.get("ingredients", [])]
         candidates = self.tavily_service.search_recipes(ingredients)
         logger.info("found %s recipe candidates", len(candidates))
-        return {"recipes": candidates, "step": "recipes_searched"}
+        return {"recipes": [item.model_dump() for item in candidates], "step": "recipes_searched"}  # 转为 dict
 
     def _rank_node(self, state: ChefState) -> ChefState:
         rank_input = to_rank_input(state)
@@ -69,7 +69,7 @@ class ChefGraphFactory:
                 candidates=rank_input.candidates,
             )
         )
-        recipes = [RankedRecipe.model_validate(item) for item in ranked_result.top3]
+        recipes = [item.model_dump() for item in ranked_result.top3]  # 转为 dict
         return {
             "recipes": recipes,
             "table_markdown": ranked_result.table_markdown,
@@ -96,8 +96,9 @@ class ChefGraphFactory:
 
     def _weekly_node(self, state: ChefState) -> ChefState:
         weekly_plan = self.llm_service.weekly_plan(state.get("history_text", ""))
+        plan_data = weekly_plan.weekly_plan if hasattr(weekly_plan, "weekly_plan") else weekly_plan.get("weekly_plan", [])
         return {
-            "weekly_plan": weekly_plan.weekly_plan if hasattr(weekly_plan, "weekly_plan") else weekly_plan.get("weekly_plan", []),
+            "weekly_plan": [item.model_dump() if hasattr(item, "model_dump") else item for item in plan_data],  # 转为 dict
             "weekly_plan_markdown": weekly_plan.weekly_plan_markdown if hasattr(weekly_plan, "weekly_plan_markdown") else weekly_plan.get("weekly_plan_markdown", ""),
             "step": "weekly_plan_generated",
             "messages": [AIMessage(content="已生成周计划")],
