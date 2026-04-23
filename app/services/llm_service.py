@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import time
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -19,14 +18,11 @@ class LLMService:
     """Wraps Qwen chat and vision models using LangChain."""
 
     def __init__(self, settings: Settings) -> None:
-        self._rerank_candidate_limit = max(1, settings.rerank_candidate_limit)
-        self._rerank_content_max_chars = max(1, settings.rerank_content_max_chars)
         self._chat = ChatOpenAI(
             model=settings.qwen_chat_model,
             api_key=settings.dashscope_api_key,
             base_url=settings.qwen_base_url,
             temperature=settings.qwen_chat_temperature,
-            model_kwargs={"response_format": {"type": "json_object"}},
         )
         self._vision = ChatOpenAI(
             model=settings.qwen_vision_model,
@@ -51,41 +47,6 @@ class LLMService:
             logger.exception("failed to parse %s response: %s", operation, raw_content[:500])
             raise ParseError(f"failed to parse model output for {operation}") from exc
 
-    def _prepare_candidates_for_rerank(
-        self, ingredients: list[Ingredient], candidates: list[RecipeCandidate]
-    ) -> list[dict[str, str]]:
-        ingredient_names = [item.name.strip().lower() for item in ingredients if item.name.strip()]
-
-        deduped: list[RecipeCandidate] = []
-        seen_urls: set[str] = set()
-        for candidate in candidates:
-            url = candidate.url.strip()
-            if url and url in seen_urls:
-                continue
-            if url:
-                seen_urls.add(url)
-            deduped.append(candidate)
-
-        scored: list[tuple[int, RecipeCandidate]] = []
-        for candidate in deduped:
-            haystack = f"{candidate.title}\n{candidate.content}".lower()
-            overlap = sum(1 for name in ingredient_names if name and name in haystack)
-            scored.append((overlap, candidate))
-
-        scored.sort(key=lambda pair: pair[0], reverse=True)
-        selected = [item for _, item in scored[: self._rerank_candidate_limit]]
-
-        compacted: list[dict[str, str]] = []
-        for item in selected:
-            compacted.append(
-                {
-                    "title": item.title.strip()[:120],
-                    "content": item.content.strip()[: self._rerank_content_max_chars],
-                    "url": item.url.strip(),
-                }
-            )
-        return compacted
-
     def recognize_ingredients(self, image_url: str) -> list[Ingredient]:
         prompt = (
             "识别图片中的食材。输出 JSON 数组，每个元素必须包含: "
@@ -107,7 +68,6 @@ class LLMService:
         return [Ingredient.model_validate(item) for item in parsed]
 
     def rank_recipes(self, ingredients: list[Ingredient], candidates: list[RecipeCandidate]) -> RankRecipesResult:
-        compact_candidates = self._prepare_candidates_for_rerank(ingredients, candidates)
         system = SystemMessage(content="你是严谨的私厨助手。只输出 JSON。")
         user = HumanMessage(
             content=(
@@ -120,21 +80,13 @@ class LLMService:
                 "5. score 是 0-100 的分数\n"
                 "输出 JSON 格式：{\"top3\": [{\"rank\": 1, \"name\": \"具体菜名\", \"reason\": \"推荐理由\", \"score\": 85, \"source_url\": \"网址\"}], \"table_markdown\": \"markdown表格\"}\n"
                 f"ingredients={json.dumps([item.model_dump() for item in ingredients], ensure_ascii=False)}\n"
-                f"candidates={json.dumps(compact_candidates, ensure_ascii=False)}"
+                f"candidates={json.dumps([item.model_dump() for item in candidates], ensure_ascii=False)}"
             )
         )
-        started = time.perf_counter()
         try:
             result = self._chat.invoke([system, user])
         except Exception as exc:  # noqa: BLE001
             raise UpstreamServiceError("chat model call failed in rank_recipes") from exc
-        elapsed = time.perf_counter() - started
-        logger.info(
-            "rank_recipes latency=%.2fs candidates_raw=%s candidates_sent=%s",
-            elapsed,
-            len(candidates),
-            len(compact_candidates),
-        )
 
         raw_content = str(result.content).strip()
         parsed = self._parse_json(raw_content, "rank_recipes")

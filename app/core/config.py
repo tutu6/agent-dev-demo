@@ -23,8 +23,6 @@ class Settings(BaseSettings):
 
     tavily_api_key: str = Field(default="", alias="TAVILY_API_KEY")
     tavily_max_results: int = 8
-    rerank_candidate_limit: int = 5
-    rerank_content_max_chars: int = 280
 
     sqlite_checkpoint_path: str = "./checkpoints/chef_graph.db"
 
