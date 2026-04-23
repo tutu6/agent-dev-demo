@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import logging
-import sqlite3
-from pathlib import Path
+from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage
-from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 
+from app.domain.models import Ingredient, RankRecipesResult, RankedRecipe
 from app.graph.state import ChefState
 from app.services.llm_service import LLMService
 from app.services.tavily_service import TavilyService
@@ -16,12 +15,11 @@ logger = logging.getLogger(__name__)
 
 
 class ChefGraphFactory:
-    def __init__(self, llm_service: LLMService, tavily_service: TavilyService, sqlite_path: str) -> None:
+    def __init__(self, llm_service: LLMService, tavily_service: TavilyService) -> None:
         self.llm_service = llm_service
         self.tavily_service = tavily_service
-        self.sqlite_path = sqlite_path
 
-    def create(self):
+    def create(self, checkpointer: Any):
         graph = StateGraph(ChefState)
         graph.add_node("recognize", self._recognize_node)
         graph.add_node("search", self._search_node)
@@ -36,15 +34,7 @@ class ChefGraphFactory:
         graph.add_edge("followup", END)
         graph.add_edge("weekly", END)
 
-        db_path = Path(self.sqlite_path)
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-        # langgraph-checkpoint-sqlite>=2.x changed `from_conn_string` to return
-        # a context manager. `graph.compile` requires a concrete
-        # `BaseCheckpointSaver` instance, so we create the saver directly from
-        # a long-lived sqlite connection.
-        conn = sqlite3.connect(str(db_path), check_same_thread=False)
-        saver = SqliteSaver(conn)
-        return graph.compile(checkpointer=saver)
+        return graph.compile(checkpointer=checkpointer)
 
     def _route_intent(self, state: ChefState) -> str:
         intent = state.get("intent", "analyze")
@@ -56,28 +46,28 @@ class ChefGraphFactory:
 
     def _recognize_node(self, state: ChefState) -> ChefState:
         image_url = state["input_image_url"]
-        ingredients = self.llm_service.recognize_ingredients(image_url)
+        ingredients = [Ingredient.model_validate(item) for item in self.llm_service.recognize_ingredients(image_url)]
         logger.info("recognized %s ingredients", len(ingredients))
         return {
             "ingredients": ingredients,
             "step": "ingredients_recognized",
-            "messages": [HumanMessage(content=f"识别食材: {ingredients}")],
+            "messages": [HumanMessage(content=f"识别食材: {[item.model_dump() for item in ingredients]}")],
         }
 
     def _search_node(self, state: ChefState) -> ChefState:
-        candidates = self.tavily_service.search_recipes(state.get("ingredients", []))
+        ingredients = [Ingredient.model_validate(item) for item in state.get("ingredients", [])]
+        candidates = self.tavily_service.search_recipes(ingredients)
         logger.info("found %s recipe candidates", len(candidates))
         return {"recipes": candidates, "step": "recipes_searched"}
 
     def _rank_node(self, state: ChefState) -> ChefState:
-        ranked = self.llm_service.rank_recipes(
-            ingredients=state.get("ingredients", []),
-            candidates=state.get("recipes", []),
-        )
-        recipes = ranked.get("top3", [])
+        ingredients = [Ingredient.model_validate(item) for item in state.get("ingredients", [])]
+        candidates = state.get("recipes", [])
+        ranked_result = RankRecipesResult.model_validate(self.llm_service.rank_recipes(ingredients=ingredients, candidates=candidates))
+        recipes = [RankedRecipe.model_validate(item) for item in ranked_result.top3]
         return {
             "recipes": recipes,
-            "table_markdown": ranked.get("table_markdown", ""),
+            "table_markdown": ranked_result.table_markdown,
             "selected_index": 0 if recipes else None,
             "step": "recipes_ranked",
             "messages": [AIMessage(content="已生成 Top3 菜谱")],
@@ -85,23 +75,24 @@ class ChefGraphFactory:
 
     def _followup_node(self, state: ChefState) -> ChefState:
         context = {
-            "ingredients": state.get("ingredients", []),
-            "recipes": state.get("recipes", []),
+            "ingredients": [Ingredient.model_validate(item).model_dump() for item in state.get("ingredients", [])],
+            "recipes": [RankedRecipe.model_validate(item).model_dump() for item in state.get("recipes", [])],
             "selected_index": state.get("selected_index"),
             "step": state.get("step"),
         }
-        answer = self.llm_service.followup(context=context, question=state.get("question", ""))
+        question = state.get("question", "")
+        answer = self.llm_service.followup(context=context, question=question)
         return {
             "answer": answer,
             "step": "followup_answered",
-            "messages": [HumanMessage(content=state.get("question", "")), AIMessage(content=answer)],
+            "messages": [HumanMessage(content=question), AIMessage(content=answer)],
         }
 
     def _weekly_node(self, state: ChefState) -> ChefState:
         weekly_plan = self.llm_service.weekly_plan(state.get("history_text", ""))
         return {
-            "weekly_plan": weekly_plan.get("weekly_plan", []),
-            "weekly_plan_markdown": weekly_plan.get("weekly_plan_markdown", ""),
+            "weekly_plan": weekly_plan.weekly_plan if hasattr(weekly_plan, "weekly_plan") else weekly_plan.get("weekly_plan", []),
+            "weekly_plan_markdown": weekly_plan.weekly_plan_markdown if hasattr(weekly_plan, "weekly_plan_markdown") else weekly_plan.get("weekly_plan_markdown", ""),
             "step": "weekly_plan_generated",
             "messages": [AIMessage(content="已生成周计划")],
         }

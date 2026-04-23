@@ -1,6 +1,12 @@
 from __future__ import annotations
 
+import sqlite3
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import AsyncIterator
+
 from fastapi import FastAPI
+from langgraph.checkpoint.sqlite import SqliteSaver
 
 from app.agents.private_chef_agent import PrivateChefAgent
 from app.api.routes import router
@@ -13,16 +19,31 @@ from app.services.tavily_service import TavilyService
 setup_logging()
 settings = get_settings()
 
-llm_service = LLMService(settings)
-tavily_service = TavilyService(settings)
-graph = ChefGraphFactory(
-    llm_service=llm_service,
-    tavily_service=tavily_service,
-    sqlite_path=settings.sqlite_checkpoint_path,
-).create()
-agent = PrivateChefAgent(graph)
 
-app = FastAPI(title=settings.app_name, version=settings.app_version)
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    llm_service = LLMService(settings)
+    tavily_service = TavilyService(settings)
+
+    db_path = Path(settings.sqlite_checkpoint_path)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(db_path), check_same_thread=False)
+    saver = SqliteSaver(conn)
+
+    graph = ChefGraphFactory(
+        llm_service=llm_service,
+        tavily_service=tavily_service,
+    ).create(checkpointer=saver)
+
+    app.state.agent = PrivateChefAgent(graph)
+    app.state.sqlite_conn = conn
+    try:
+        yield
+    finally:
+        conn.close()
+
+
+app = FastAPI(title=settings.app_name, version=settings.app_version, lifespan=lifespan)
 app.include_router(router)
 
 

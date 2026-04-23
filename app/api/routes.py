@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import base64
 import logging
+from collections.abc import Callable
+from typing import Any
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 
 from app.agents.private_chef_agent import PrivateChefAgent
+from app.domain.errors import ParseError, UpstreamServiceError
 from app.schemas.requests import FollowupRequest, UrlRequest, WeeklyPlanRequest
 from app.schemas.responses import AnalyzeResponse, FollowupResponse, HistoryResponse, WeeklyPlanResponse
 
@@ -13,10 +16,23 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def get_agent() -> PrivateChefAgent:
-    from app.main import agent
+def get_agent(request: Request) -> PrivateChefAgent:
+    return request.app.state.agent
 
-    return agent
+
+
+
+def _dump_item(item: Any) -> dict[str, Any]:
+    return item.model_dump() if hasattr(item, "model_dump") else item
+
+
+def _invoke_with_error_mapping(func: Callable[[], dict]) -> dict:
+    try:
+        return func()
+    except ParseError as exc:
+        raise HTTPException(status_code=502, detail="模型输出解析失败") from exc
+    except UpstreamServiceError as exc:
+        raise HTTPException(status_code=502, detail="上游模型服务调用失败") from exc
 
 
 @router.post("/upload", response_model=AnalyzeResponse)
@@ -31,12 +47,13 @@ async def upload_image(
         raise HTTPException(status_code=400, detail="empty image file")
     image_base64 = base64.b64encode(content).decode("utf-8")
     try:
-        state = chef_agent.analyze_by_upload(thread_id, image_base64)
+        state = _invoke_with_error_mapping(lambda: chef_agent.analyze_by_upload(thread_id, image_base64))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     return AnalyzeResponse(
         thread_id=thread_id,
-        ingredients=state.get("ingredients", []),
+        ingredients=[_dump_item(item) for item in state.get("ingredients", [])],
         recipes=state.get("recipes", []),
         table_markdown=state.get("table_markdown", ""),
     )
@@ -45,10 +62,10 @@ async def upload_image(
 @router.post("/url", response_model=AnalyzeResponse)
 def analyze_url(payload: UrlRequest, chef_agent: PrivateChefAgent = Depends(get_agent)) -> AnalyzeResponse:
     logger.info(f"[API] POST /url | thread_id={payload.thread_id} | image_url={payload.image_url}")
-    state = chef_agent.analyze_by_url(payload.thread_id, str(payload.image_url))
+    state = _invoke_with_error_mapping(lambda: chef_agent.analyze_by_url(payload.thread_id, str(payload.image_url)))
     return AnalyzeResponse(
         thread_id=payload.thread_id,
-        ingredients=state.get("ingredients", []),
+        ingredients=[_dump_item(item) for item in state.get("ingredients", [])],
         recipes=state.get("recipes", []),
         table_markdown=state.get("table_markdown", ""),
     )
@@ -57,7 +74,7 @@ def analyze_url(payload: UrlRequest, chef_agent: PrivateChefAgent = Depends(get_
 @router.post("/followup", response_model=FollowupResponse)
 def followup(payload: FollowupRequest, chef_agent: PrivateChefAgent = Depends(get_agent)) -> FollowupResponse:
     logger.info(f"[API] POST /followup | thread_id={payload.thread_id} | question={payload.question[:50]}...")
-    state = chef_agent.followup(payload.thread_id, payload.question)
+    state = _invoke_with_error_mapping(lambda: chef_agent.followup(payload.thread_id, payload.question))
     return FollowupResponse(
         thread_id=payload.thread_id,
         answer=state.get("answer", ""),
@@ -68,10 +85,10 @@ def followup(payload: FollowupRequest, chef_agent: PrivateChefAgent = Depends(ge
 @router.post("/weekly_plan", response_model=WeeklyPlanResponse)
 def weekly_plan(payload: WeeklyPlanRequest, chef_agent: PrivateChefAgent = Depends(get_agent)) -> WeeklyPlanResponse:
     logger.info(f"[API] POST /weekly_plan | thread_id={payload.thread_id} | history_text_length={len(payload.history_text)}")
-    state = chef_agent.weekly_plan(payload.thread_id, payload.history_text)
+    state = _invoke_with_error_mapping(lambda: chef_agent.weekly_plan(payload.thread_id, payload.history_text))
     return WeeklyPlanResponse(
         thread_id=payload.thread_id,
-        weekly_plan=state.get("weekly_plan", []),
+        weekly_plan=[_dump_item(item) for item in state.get("weekly_plan", [])],
         weekly_plan_markdown=state.get("weekly_plan_markdown", ""),
     )
 

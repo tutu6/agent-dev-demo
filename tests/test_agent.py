@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import base64
+import sqlite3
 from pathlib import Path
+
+from langgraph.checkpoint.sqlite import SqliteSaver
 
 from app.agents.private_chef_agent import PrivateChefAgent
 from app.graph.workflow import ChefGraphFactory
@@ -17,9 +20,9 @@ class DummyLLM:
     def rank_recipes(self, ingredients, candidates):
         return {
             "top3": [
-                {"rank": 1, "name": "番茄炒蛋", "reason": "高匹配", "score": 9.2, "source_url": "https://a.com"},
-                {"rank": 2, "name": "西红柿蛋汤", "reason": "快手", "score": 8.7, "source_url": "https://b.com"},
-                {"rank": 3, "name": "蛋饼", "reason": "简单", "score": 8.0, "source_url": "https://c.com"},
+                {"rank": 1, "name": "番茄炒蛋", "reason": "高匹配", "score": 92, "source_url": "https://a.com"},
+                {"rank": 2, "name": "西红柿蛋汤", "reason": "快手", "score": 87, "source_url": "https://b.com"},
+                {"rank": 3, "name": "蛋饼", "reason": "简单", "score": 80, "source_url": "https://c.com"},
             ],
             "table_markdown": "|排名|菜名|\n|---|---|\n|1|番茄炒蛋|",
         }
@@ -42,9 +45,14 @@ class DummyTavily:
         return [{"title": "番茄炒蛋", "content": "步骤", "url": "https://a.com"}]
 
 
+def build_agent(tmp_path: Path) -> PrivateChefAgent:
+    conn = sqlite3.connect(str(tmp_path / "cp.db"), check_same_thread=False)
+    graph = ChefGraphFactory(DummyLLM(), DummyTavily()).create(checkpointer=SqliteSaver(conn))
+    return PrivateChefAgent(graph)
+
+
 def test_graph_analyze_followup_and_weekly_plan(tmp_path: Path):
-    graph = ChefGraphFactory(DummyLLM(), DummyTavily(), sqlite_path=str(tmp_path / "cp.db")).create()
-    agent = PrivateChefAgent(graph)
+    agent = build_agent(tmp_path)
 
     image_b64 = base64.b64encode(b"fakejpg").decode("utf-8")
     analyzed = agent.analyze_by_upload("t-1", image_b64)
@@ -66,8 +74,7 @@ def test_graph_analyze_followup_and_weekly_plan(tmp_path: Path):
 
 
 def test_invalid_base64(tmp_path: Path):
-    graph = ChefGraphFactory(DummyLLM(), DummyTavily(), sqlite_path=str(tmp_path / "cp.db")).create()
-    agent = PrivateChefAgent(graph)
+    agent = build_agent(tmp_path)
 
     try:
         agent.analyze_by_upload("t-2", "not-valid-base64")
