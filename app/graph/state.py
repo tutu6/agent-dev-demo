@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Literal, TypedDict
+from typing import Literal, TypedDict
 
 from langchain_core.messages import BaseMessage
+
+from app.domain.models import Ingredient, RankedRecipe, WeeklyPlanDay
 
 
 class ChefState(TypedDict, total=False):
@@ -16,11 +18,11 @@ class ChefState(TypedDict, total=False):
     question: str
     history_text: str
 
-    ingredients: list[dict[str, Any]]
-    recipes: list[dict[str, Any]]
+    ingredients: list[Ingredient]
+    recipes: list[RankedRecipe]
     selected_index: int | None
     step: str
     table_markdown: str
     answer: str
-    weekly_plan: list[dict[str, Any]]
+    weekly_plan: list[WeeklyPlanDay]
     weekly_plan_markdown: str

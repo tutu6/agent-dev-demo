@@ -3,6 +3,8 @@ from __future__ import annotations
 import base64
 from typing import Any
 
+from pydantic import BaseModel
+
 from app.graph.state import ChefState
 
 
@@ -53,4 +55,15 @@ class PrivateChefAgent:
 
     def get_history(self, thread_id: str) -> dict[str, Any]:
         snapshot = self.graph.get_state(self._config(thread_id))
-        return dict(snapshot.values) if snapshot else {}
+        if not snapshot:
+            return {}
+
+        serialized: dict[str, Any] = {}
+        for key, value in dict(snapshot.values).items():
+            if isinstance(value, BaseModel):
+                serialized[key] = value.model_dump()
+            elif isinstance(value, list):
+                serialized[key] = [item.model_dump() if isinstance(item, BaseModel) else item for item in value]
+            else:
+                serialized[key] = value
+        return serialized

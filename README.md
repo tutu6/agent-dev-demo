@@ -20,7 +20,7 @@
 - FastAPI（API）
 - LangChain（Qwen 调用封装）
 - LangGraph（状态机 + checkpoint）
-- SQLite（LangGraph SqliteSaver）
+- SQLite（LangGraph SqliteSaver，FastAPI lifespan 管理连接生命周期）
 - Tavily（检索）
 - uv（环境管理）
 
@@ -53,6 +53,10 @@ uv run uvicorn app.main:app --reload --port 8000
 ```env
 DASHSCOPE_API_KEY=your_dashscope_key
 TAVILY_API_KEY=your_tavily_key
+QWEN_CHAT_TEMPERATURE=0.2
+QWEN_VISION_TEMPERATURE=0.1
+TAVILY_MAX_RESULTS=8
+SQLITE_CHECKPOINT_PATH=./checkpoints/chef_graph.db
 ```
 
 ## 5. API 示例
