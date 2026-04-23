@@ -6,6 +6,7 @@ from typing import Any
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.graph import END, START, StateGraph
 
+from app.adapters import to_followup_input, to_rank_input
 from app.domain.models import Ingredient, RankRecipesResult, RankedRecipe
 from app.graph.state import ChefState
 from app.services.llm_service import LLMService
@@ -61,9 +62,13 @@ class ChefGraphFactory:
         return {"recipes": candidates, "step": "recipes_searched"}
 
     def _rank_node(self, state: ChefState) -> ChefState:
-        ingredients = [Ingredient.model_validate(item) for item in state.get("ingredients", [])]
-        candidates = state.get("recipes", [])
-        ranked_result = RankRecipesResult.model_validate(self.llm_service.rank_recipes(ingredients=ingredients, candidates=candidates))
+        rank_input = to_rank_input(state)
+        ranked_result = RankRecipesResult.model_validate(
+            self.llm_service.rank_recipes(
+                ingredients=rank_input.ingredients,
+                candidates=rank_input.candidates,
+            )
+        )
         recipes = [RankedRecipe.model_validate(item) for item in ranked_result.top3]
         return {
             "recipes": recipes,
@@ -74,11 +79,12 @@ class ChefGraphFactory:
         }
 
     def _followup_node(self, state: ChefState) -> ChefState:
+        followup_input = to_followup_input(state)
         context = {
-            "ingredients": [Ingredient.model_validate(item).model_dump() for item in state.get("ingredients", [])],
-            "recipes": [RankedRecipe.model_validate(item).model_dump() for item in state.get("recipes", [])],
-            "selected_index": state.get("selected_index"),
-            "step": state.get("step"),
+            "ingredients": [item.model_dump() for item in followup_input.ingredients],
+            "recipes": [item.model_dump() for item in followup_input.recipes],
+            "selected_index": followup_input.selected_index,
+            "step": followup_input.step,
         }
         question = state.get("question", "")
         answer = self.llm_service.followup(context=context, question=question)
