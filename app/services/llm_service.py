@@ -99,20 +99,34 @@ class LLMService:
 
     @staticmethod
     def _extract_recipe_name(title: str, content: str) -> str:
-        text = f"{title}\n{content[:180]}"
-        pattern = re.compile(
-            r"([\u4e00-\u9fffA-Za-z0-9]{2,20}(炒|煎|炖|煮|蒸|烤|拌|焖|卤|炸|汤|面|饭|粥|饼|羹|锅|卷|沙拉)[\u4e00-\u9fffA-Za-z0-9]{0,8})"
+        def normalize_name(raw: str) -> str:
+            name = raw.strip(" \t\n\r\"'“”‘’《》【】[]()（）")
+            name = re.sub(r"^(一周|一日|每天|[0-9一二三四五六七八九十]+[道款种份个])", "", name).strip()
+            name = re.sub(r"(怎么做|的做法|做法大全|家常做法|教程|步骤)$", "", name).strip()
+            return name
+
+        blocked_words = {"低卡", "营养", "不重样", "合集", "大全", "排行", "清单", "推荐"}
+        dish_pattern = re.compile(
+            r"([\u4e00-\u9fffA-Za-z0-9]{2,18}(炒|煎|炖|煮|蒸|烤|拌|焖|卤|炸|汤|面|饭|粥|饼|羹|锅|卷|沙拉|果蔬汁)[\u4e00-\u9fffA-Za-z0-9]{0,6})"
         )
-        match = pattern.search(text)
-        if match:
-            name = match.group(1)
-            return re.sub(r"(怎么做|的做法|做法)$", "", name).strip()
+
+        text = f"{title}\n{content[:220]}"
+        segments = [seg.strip() for seg in re.split(r"[!！,，。；;：:\n|｜/\\_-]+", text) if seg.strip()]
+        for segment in segments:
+            match = dish_pattern.search(segment)
+            if not match:
+                continue
+            candidate = normalize_name(match.group(1))
+            if not candidate or len(candidate) > 12:
+                continue
+            if any(word in candidate for word in blocked_words):
+                continue
+            return candidate
 
         cleaned = re.sub(r"[【\[].*?[】\]]", "", title).strip()
-        for delimiter in ("｜", "|", "—", "-", "_", "（", "("):
-            cleaned = cleaned.split(delimiter, maxsplit=1)[0].strip()
-        cleaned = re.sub(r"(怎么做|的做法|做法大全|家常做法|教程|步骤)$", "", cleaned).strip()
-        return cleaned or "家常菜"
+        cleaned = re.split(r"[!！,，。；;：:|｜_-]+", cleaned, maxsplit=1)[0].strip()
+        cleaned = normalize_name(cleaned)
+        return cleaned if cleaned and len(cleaned) <= 12 else "家常菜"
 
     @staticmethod
     def _heuristic_rank_recipes(ingredients: list[Ingredient], candidates: list[RecipeCandidate]) -> RankRecipesResult:

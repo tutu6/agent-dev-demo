@@ -31,3 +31,9 @@ def test_heuristic_rank_recipes_uses_recipe_name_not_page_title():
     result = LLMService._heuristic_rank_recipes(ingredients, candidates)
     assert result.top3[0].name == "番茄炒蛋"
     assert result.top3[0].name != candidates[0].title
+
+
+def test_extract_recipe_name_avoids_marketing_title_fragment():
+    title = "一周鲜榨果蔬汁!低卡营养不重样"
+    content = "鲜榨果蔬汁做法：苹果、芹菜和黄瓜一起榨汁即可。"
+    assert LLMService._extract_recipe_name(title, content) == "鲜榨果蔬汁"
