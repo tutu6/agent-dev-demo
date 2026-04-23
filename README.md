@@ -15,7 +15,50 @@
 
 ## 2. 架构说明
 
-### 技术栈
+### 2.1 系统架构图
+
+```mermaid
+flowchart LR
+    U[用户 / 前端] -->|HTTP| API[FastAPI Routes
+/upload /url /followup /weekly_plan /history]
+    API --> AGENT[PrivateChefAgent
+统一入口与线程配置]
+    AGENT --> GRAPH[LangGraph Workflow
+intent 路由 + 节点编排]
+
+    GRAPH -->|analyze| R1[recognize 节点
+Qwen-VL 识别食材]
+    R1 --> R2[search 节点
+Tavily 检索菜谱]
+    R2 --> R3[rank 节点
+Qwen 评分输出 Top3]
+
+    GRAPH -->|followup| F[followup 节点
+基于状态问答]
+    GRAPH -->|weekly_plan| W[weekly 节点
+生成一周饮食计划]
+
+    R3 --> S[(ChefState + Messages)]
+    F --> S
+    W --> S
+    S <--> CKPT[(SqliteSaver Checkpoint
+thread_id 会话恢复)]
+
+    subgraph Services
+        LLM[LLMService
+多模态识别/排序/问答/周计划]
+        TV[TavilyService
+配方检索]
+    end
+
+    R1 --> LLM
+    R3 --> LLM
+    F --> LLM
+    W --> LLM
+    R2 --> TV
+```
+
+### 2.2 技术栈
 - Python 3.11+
 - FastAPI（API）
 - LangChain（Qwen 调用封装）
@@ -23,6 +66,27 @@
 - SQLite（LangGraph SqliteSaver，FastAPI lifespan 管理连接生命周期）
 - Tavily（检索）
 - uv（环境管理）
+
+### 2.3 关键设计理念
+1. **编排与能力解耦**：Graph 只关心流程节点，具体能力由 `LLMService` 与 `TavilyService` 提供，便于替换模型和检索后端。
+2. **状态驱动而非过程耦合**：通过 `ChefState` 统一承载流程产物（ingredients/recipes/plan）和上下文（messages），节点之间通过状态通信。
+3. **意图优先路由**：入口统一收敛到 `intent`（analyze/followup/weekly_plan），降低 API 层复杂度，便于扩展新能力节点。
+4. **可恢复会话**：以 `thread_id` + `SqliteSaver` 持久化图状态，支持追问与历史回放，适合演示多轮 Agent 能力。
+5. **适配器边界清晰**：通过 `adapters` 承担状态与 schema 映射，避免业务节点直接依赖 API 响应模型，增强可测试性。
+6. **错误映射前置**：API 层统一把领域异常映射为 HTTP 错误码，保证上游调用方得到稳定、可预期的错误语义。
+
+### 2.4 功能层级说明（自上而下）
+- **L1 交互层（API 层）**：处理上传、URL 分析、追问、周计划、历史查询等 HTTP 请求。
+- **L2 应用层（Agent 层）**：`PrivateChefAgent` 组装输入状态、注入 `thread_id` 配置、调用图执行。
+- **L3 编排层（Graph 层）**：`ChefGraphFactory` 定义节点、边、意图路由与状态流转。
+- **L4 能力层（Service 层）**：
+  - `LLMService`：识别食材、候选排序、追问回答、周计划生成。
+  - `TavilyService`：基于食材进行外部检索。
+- **L5 领域与契约层（Domain/Schemas/Adapters）**：
+  - `domain` 提供实体与错误类型。
+  - `schemas` 定义请求响应协议。
+  - `adapters` 做跨层数据转换。
+- **L6 基础设施层（Core/Checkpoint）**：配置、日志、SQLite checkpoint 持久化。
 
 ### 状态设计（State 与 Messages 分离）
 `ChefState` 包含：
