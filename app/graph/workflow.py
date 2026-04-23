@@ -48,18 +48,20 @@ class ChefGraphFactory:
     def _recognize_node(self, state: ChefState) -> ChefState:
         image_url = state["input_image_url"]
         ingredients = self.llm_service.recognize_ingredients(image_url)
+        ingredient_dicts = [item.model_dump() if hasattr(item, "model_dump") else item for item in ingredients]
         logger.info("recognized %s ingredients", len(ingredients))
         return {
-            "ingredients": [item.model_dump() for item in ingredients],  # 转为 dict
+            "ingredients": ingredient_dicts,  # 转为 dict
             "step": "ingredients_recognized",
-            "messages": [HumanMessage(content=f"识别食材: {[item.model_dump() for item in ingredients]}")],
+            "messages": [HumanMessage(content=f"识别食材: {ingredient_dicts}")],
         }
 
     def _search_node(self, state: ChefState) -> ChefState:
         ingredients = [Ingredient.model_validate(item) for item in state.get("ingredients", [])]
         candidates = self.tavily_service.search_recipes(ingredients)
+        candidate_dicts = [item.model_dump() if hasattr(item, "model_dump") else item for item in candidates]
         logger.info("found %s recipe candidates", len(candidates))
-        return {"recipes": [item.model_dump() for item in candidates], "step": "recipes_searched"}  # 转为 dict
+        return {"recipes": candidate_dicts, "step": "recipes_searched"}  # 转为 dict
 
     def _rank_node(self, state: ChefState) -> ChefState:
         rank_input = to_rank_input(state)
