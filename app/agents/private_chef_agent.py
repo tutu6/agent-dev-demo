@@ -3,8 +3,7 @@ from __future__ import annotations
 import base64
 from typing import Any
 
-from pydantic import BaseModel
-
+from app.adapters import serialize_model
 from app.graph.state import ChefState
 
 
@@ -60,10 +59,5 @@ class PrivateChefAgent:
 
         serialized: dict[str, Any] = {}
         for key, value in dict(snapshot.values).items():
-            if isinstance(value, BaseModel):
-                serialized[key] = value.model_dump()
-            elif isinstance(value, list):
-                serialized[key] = [item.model_dump() if isinstance(item, BaseModel) else item for item in value]
-            else:
-                serialized[key] = value
+            serialized[key] = serialize_model(value)
         return serialized
