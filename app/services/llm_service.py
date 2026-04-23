@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -18,6 +19,7 @@ class LLMService:
     """Wraps Qwen chat and vision models using LangChain."""
 
     def __init__(self, settings: Settings) -> None:
+        self._use_llm_for_rank = settings.rank_use_llm
         self._chat = ChatOpenAI(
             model=settings.qwen_chat_model,
             api_key=settings.dashscope_api_key,
@@ -68,6 +70,9 @@ class LLMService:
         return [Ingredient.model_validate(item) for item in parsed]
 
     def rank_recipes(self, ingredients: list[Ingredient], candidates: list[RecipeCandidate]) -> RankRecipesResult:
+        if not self._use_llm_for_rank:
+            return self._heuristic_rank_recipes(ingredients, candidates)
+
         system = SystemMessage(content="你是严谨的私厨助手。只输出 JSON。")
         user = HumanMessage(
             content=(
@@ -91,6 +96,58 @@ class LLMService:
         raw_content = str(result.content).strip()
         parsed = self._parse_json(raw_content, "rank_recipes")
         return RankRecipesResult.model_validate(parsed)
+
+    @staticmethod
+    def _extract_recipe_name(title: str, content: str) -> str:
+        text = f"{title}\n{content[:180]}"
+        pattern = re.compile(
+            r"([\u4e00-\u9fffA-Za-z0-9]{2,20}(炒|煎|炖|煮|蒸|烤|拌|焖|卤|炸|汤|面|饭|粥|饼|羹|锅|卷|沙拉)[\u4e00-\u9fffA-Za-z0-9]{0,8})"
+        )
+        match = pattern.search(text)
+        if match:
+            name = match.group(1)
+            return re.sub(r"(怎么做|的做法|做法)$", "", name).strip()
+
+        cleaned = re.sub(r"[【\[].*?[】\]]", "", title).strip()
+        for delimiter in ("｜", "|", "—", "-", "_", "（", "("):
+            cleaned = cleaned.split(delimiter, maxsplit=1)[0].strip()
+        cleaned = re.sub(r"(怎么做|的做法|做法大全|家常做法|教程|步骤)$", "", cleaned).strip()
+        return cleaned or "家常菜"
+
+    @staticmethod
+    def _heuristic_rank_recipes(ingredients: list[Ingredient], candidates: list[RecipeCandidate]) -> RankRecipesResult:
+        ingredient_names = {item.name for item in ingredients}
+        ranked: list[dict[str, Any]] = []
+        for candidate in candidates:
+            name = LLMService._extract_recipe_name(candidate.title, candidate.content)
+            match_hits = sum(1 for item in ingredient_names if item and item in f"{candidate.title}{candidate.content}")
+            score = min(100.0, 60.0 + match_hits * 10.0)
+            ranked.append(
+                {
+                    "name": name,
+                    "reason": f"命中 {match_hits} 个已有食材，且步骤信息较完整",
+                    "score": score,
+                    "source_url": candidate.url,
+                }
+            )
+
+        ranked = sorted(ranked, key=lambda item: item["score"], reverse=True)[:3]
+        top3 = []
+        for idx, item in enumerate(ranked, start=1):
+            top3.append(
+                {
+                    "rank": idx,
+                    "name": item["name"],
+                    "reason": item["reason"],
+                    "score": item["score"],
+                    "source_url": item["source_url"],
+                }
+            )
+
+        table_markdown = "| 排名 | 菜名 | 评分 | 理由 |\n|---|---|---:|---|\n"
+        for item in top3:
+            table_markdown += f"| {item['rank']} | {item['name']} | {item['score']:.1f} | {item['reason']} |\n"
+        return RankRecipesResult.model_validate({"top3": top3, "table_markdown": table_markdown})
 
     def followup(self, context: dict[str, Any], question: str) -> str:
         try:
