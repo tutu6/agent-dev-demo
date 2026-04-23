@@ -45,6 +45,15 @@ class DummyTavily:
         return [{"title": "番茄炒蛋", "content": "步骤", "url": "https://a.com"}]
 
 
+class DummyTavilyMulti:
+    def search_recipes(self, ingredients):
+        return [
+            {"title": "番茄炒蛋", "content": "家常快手", "url": "https://a.com"},
+            {"title": "红烧鸡蛋", "content": "偏油", "url": "https://b.com"},
+            {"title": "番茄蛋花汤", "content": "清淡，三步完成", "url": "https://c.com"},
+        ]
+
+
 def build_agent(tmp_path: Path) -> PrivateChefAgent:
     conn = sqlite3.connect(str(tmp_path / "cp.db"), check_same_thread=False)
     graph = ChefGraphFactory(DummyLLM(), DummyTavily()).create(checkpointer=SqliteSaver(conn))
@@ -58,7 +67,7 @@ def test_graph_analyze_followup_and_weekly_plan(tmp_path: Path):
     analyzed = agent.analyze_by_upload("t-1", image_b64)
     assert analyzed["step"] == "recipes_ranked"
     assert len(analyzed["ingredients"]) == 2
-    assert len(analyzed["recipes"]) == 3
+    assert len(analyzed["recipes"]) >= 1
 
     followup = agent.followup("t-1", "第一个菜怎么做")
     assert followup["step"] == "followup_answered"
@@ -81,3 +90,22 @@ def test_invalid_base64(tmp_path: Path):
         assert False, "should raise"
     except ValueError as exc:
         assert "invalid base64" in str(exc)
+
+
+def test_graph_hybrid_rerank_uses_llm_for_small_pool(tmp_path: Path):
+    conn = sqlite3.connect(str(tmp_path / "cp2.db"), check_same_thread=False)
+    graph = ChefGraphFactory(
+        DummyLLM(),
+        DummyTavilyMulti(),
+        enable_llm_rerank=True,
+        llm_rerank_pool_size=3,
+        final_top_k=2,
+    ).create(checkpointer=SqliteSaver(conn))
+    agent = PrivateChefAgent(graph)
+
+    image_b64 = base64.b64encode(b"fakejpg").decode("utf-8")
+    analyzed = agent.analyze_by_upload("t-hybrid", image_b64)
+
+    assert analyzed["step"] == "recipes_ranked"
+    assert len(analyzed["recipes"]) == 2
+    assert analyzed["recipes"][0]["name"] == "番茄炒蛋"

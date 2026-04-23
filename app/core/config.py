@@ -23,6 +23,12 @@ class Settings(BaseSettings):
 
     tavily_api_key: str = Field(default="", alias="TAVILY_API_KEY")
     tavily_max_results: int = 8
+    rank_weight_nutrition: float = Field(default=0.3, alias="RANK_WEIGHT_NUTRITION")
+    rank_weight_match: float = Field(default=0.4, alias="RANK_WEIGHT_MATCH")
+    rank_weight_simplicity: float = Field(default=0.3, alias="RANK_WEIGHT_SIMPLICITY")
+    enable_llm_rerank: bool = Field(default=False, alias="ENABLE_LLM_RERANK")
+    llm_rerank_pool_size: int = Field(default=5, alias="LLM_RERANK_POOL_SIZE")
+    final_top_k: int = Field(default=3, alias="FINAL_TOP_K")
 
     sqlite_checkpoint_path: str = "./checkpoints/chef_graph.db"
 

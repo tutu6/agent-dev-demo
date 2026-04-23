@@ -14,6 +14,7 @@ from app.core.config import get_settings
 from app.core.logging import setup_logging
 from app.graph.workflow import ChefGraphFactory
 from app.services.llm_service import LLMService
+from app.services.ranking_service import RankingWeights, RuleBasedRecipeRanker
 from app.services.tavily_service import TavilyService
 
 setup_logging()
@@ -24,6 +25,13 @@ settings = get_settings()
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     llm_service = LLMService(settings)
     tavily_service = TavilyService(settings)
+    recipe_ranker = RuleBasedRecipeRanker(
+        RankingWeights(
+            nutrition=settings.rank_weight_nutrition,
+            match=settings.rank_weight_match,
+            simplicity=settings.rank_weight_simplicity,
+        )
+    )
 
     db_path = Path(settings.sqlite_checkpoint_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -33,6 +41,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     graph = ChefGraphFactory(
         llm_service=llm_service,
         tavily_service=tavily_service,
+        recipe_ranker=recipe_ranker,
+        enable_llm_rerank=settings.enable_llm_rerank,
+        llm_rerank_pool_size=settings.llm_rerank_pool_size,
+        final_top_k=settings.final_top_k,
     ).create(checkpointer=saver)
 
     app.state.agent = PrivateChefAgent(graph)
